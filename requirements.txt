@@ -1,0 +1,20 @@
+# FastAPI 서버
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.17
+
+# Streamlit 대쉬보드
+streamlit==1.41.1
+plotly==5.24.1
+
+# 기존 의존성들
+supabase==2.10.0
+FinanceDataReader==0.9.40
+alpha_vantage==2.3.1
+yfinance==0.2.44
+pandas==2.2.3
+python-dotenv==1.0.1
+
+# 추가 필요 패키지
+pydantic==2.10.4
+httpx==0.28.1

@@ -1,0 +1,112 @@
+version: '3.8'
+
+services:
+  # AssetNest API 서버
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: assetnest-api
+    ports:
+      - "8000:8000"
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - ALPHA_VANTAGE_API_KEY=${ALPHA_VANTAGE_API_KEY}
+    volumes:
+      - .:/app:ro  # 읽기 전용 마운트로 소스 코드 동기화
+    networks:
+      - assetnest-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - redis
+
+  # AssetNest 대쉬보드
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    container_name: assetnest-dashboard
+    ports:
+      - "8501:8501"
+    environment:
+      - API_BASE_URL=http://api:8000
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+    volumes:
+      - .:/app:ro  # 읽기 전용 마운트로 소스 코드 동기화
+    networks:
+      - assetnest-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      - api
+
+  # Redis - 캐싱 및 세션 스토어
+  redis:
+    image: redis:7-alpine
+    container_name: assetnest-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - assetnest-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 주식 가격 업데이트 스케줄러 (선택사항)
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: assetnest-scheduler
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - ALPHA_VANTAGE_API_KEY=${ALPHA_VANTAGE_API_KEY}
+    volumes:
+      - .:/app:ro
+    networks:
+      - assetnest-network
+    restart: unless-stopped
+    command: python -c "
+      import schedule;
+      import time;
+      import subprocess;
+      schedule.every().day.at('09:00').do(lambda: subprocess.run(['python', 'update_stock_info.py']));
+      schedule.every().day.at('15:30').do(lambda: subprocess.run(['python', 'update_stock_info.py']));
+      print('주식 가격 업데이트 스케줄러 시작됨...');
+      while True: schedule.run_pending(); time.sleep(60)
+      "
+    depends_on:
+      - api
+      - redis
+    profiles:
+      - scheduler  # 기본적으로는 비활성화, 필요시 활성화
+
+# 네트워크 설정
+networks:
+  assetnest-network:
+    driver: bridge
+
+# 볼륨 설정
+volumes:
+  redis-data:
+    driver: local
