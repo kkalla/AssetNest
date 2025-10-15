@@ -1,7 +1,8 @@
-from pydantic import BaseModel
-from typing import List, Optional
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal
+from typing import List, Optional
+
+from pydantic import BaseModel
 
 
 class PortfolioOverview(BaseModel):
@@ -11,6 +12,12 @@ class PortfolioOverview(BaseModel):
     total_pnl_usd: float
     total_return_rate: float
     accounts: List[str]
+    # 현금성자산 vs 투자자산 분류
+    cash_asset_value: float = 0.0  # 현금성자산 가치 (KRW)
+    investment_asset_value: float = 0.0  # 투자자산 가치 (KRW)
+    cash_asset_ratio: float = 0.0  # 현금성자산 비율 (%)
+    investment_asset_ratio: float = 0.0  # 투자자산 비율 (%)
+    investment_allocations: List["AssetAllocation"] = []  # 투자자산 분배비율
     last_updated: datetime
 
     class Config:
@@ -78,3 +85,55 @@ class MarketSummary(BaseModel):
     international_pnl: float
     domestic_return_rate: float
     international_return_rate: float
+
+
+class HoldingDetail(BaseModel):
+    """자산 분배 내 개별 종목 상세 정보"""
+
+    name: str
+    symbol: str
+    amount: int
+    market_value: float
+    account: str
+
+
+class AssetAllocation(BaseModel):
+    asset_category: str
+    holdings_count: int
+    total_market_value: float
+    allocation_percentage: float
+    holdings: List[str] = []  # 종목 이름 리스트
+
+
+class AssetAllocationResponse(BaseModel):
+    total_portfolio_value: float
+    allocations: List[AssetAllocation]
+    account: Optional[str] = None
+    last_updated: datetime
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
+
+class UnmatchedProduct(BaseModel):
+    """by_accounts 테이블에는 있지만 symbol_table에는 없는 상품"""
+
+    account: str
+    invest_prod_name: str
+    amount: int
+    avg_price_krw: Optional[float] = None
+    avg_price_usd: Optional[float] = None
+    first_buy_at: Optional[date] = None
+    last_buy_at: Optional[date] = None
+
+
+class UnmatchedProductsResponse(BaseModel):
+    """매칭되지 않는 상품들의 응답"""
+
+    unmatched_products: List[UnmatchedProduct]
+    total_count: int
+    accounts_with_unmatched: List[str]
+    last_updated: datetime
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}

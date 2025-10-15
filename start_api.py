@@ -13,6 +13,7 @@ sys.path.insert(0, str(project_root))
 
 if __name__ == "__main__":
     import uvicorn
+
     from api.main import app
 
     print("🚀 AssetNest API 서버를 시작합니다...")
@@ -20,7 +21,7 @@ if __name__ == "__main__":
     print("🔧 종료하려면 Ctrl+C를 누르세요")
 
     uvicorn.run(
-        app,
+        "api.main:app",  # import string 형태로 전달
         host="0.0.0.0",
         port=8000,
         reload=True,  # 개발 중에만 사용

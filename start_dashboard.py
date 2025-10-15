@@ -4,9 +4,9 @@ AssetNest Streamlit 대쉬보드 실행 스크립트
 """
 
 import os
+import subprocess
 import sys
 from pathlib import Path
-import subprocess
 
 # 프로젝트 루트를 Python 경로에 추가
 project_root = Path(__file__).parent

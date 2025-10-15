@@ -1,12 +1,21 @@
-import streamlit as st
+import asyncio
+import os
+import sys
+from datetime import datetime
+from typing import Any, Dict, List
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import requests
-from datetime import datetime
-import asyncio
-from typing import List, Dict, Any
+import streamlit as st
+from plotly.subplots import make_subplots
+
+# 프로젝트 루트를 Python 경로에 추가
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 로거 import
+from logger import dashboard_logger, data_logger, get_dashboard_logger, ui_logger
 
 # 페이지 설정
 st.set_page_config(
@@ -23,21 +32,53 @@ st.sidebar.markdown("효율적인 자산관리 대쉬보드")
 # API 기본 URL
 API_BASE_URL = "http://localhost:8000/api/v1"
 
+# Streamlit 세션 초기화 시 로깅
+if "dashboard_initialized" not in st.session_state:
+    dashboard_logger.info("🚀 AssetNest 대시보드 세션 시작")
+    ui_logger.info("🎨 UI 컴포넌트 초기화 중...")
+    st.session_state.dashboard_initialized = True
+
+
+def log_user_action(action: str, details: str = ""):
+    """사용자 액션 로깅"""
+    ui_logger.info(f"👤 사용자 액션: {action} {f'- {details}' if details else ''}")
+
+
+def log_chart_render(chart_type: str, data_count: int = 0):
+    """차트 렌더링 로깅"""
+    ui_logger.info(
+        f"📊 차트 렌더링: {chart_type} {f'({data_count}개 데이터)' if data_count else ''}"
+    )
+
+
+def log_page_navigation(page: str):
+    """페이지 네비게이션 로깅"""
+    ui_logger.info(f"🔄 페이지 이동: {page}")
+
 
 @st.cache_data(ttl=300)  # 5분 캐시
 def fetch_portfolio_overview(account=None):
     """포트폴리오 개요 데이터 조회"""
     try:
+        data_logger.info(
+            f"📊 포트폴리오 개요 데이터 조회 시작 - 계정: {account or '전체'}"
+        )
         url = f"{API_BASE_URL}/portfolio/overview"
         params = {"account": account} if account else {}
         response = requests.get(url, params=params)
 
         if response.status_code == 200:
-            return response.json()
+            data = response.json()
+            data_logger.info(
+                f"✅ 포트폴리오 개요 데이터 조회 성공 - 총 자산: ₩{data.get('total_value_krw', 0):,.0f}"
+            )
+            return data
         else:
+            data_logger.error(f"❌ API 오류: {response.status_code} - {response.text}")
             st.error(f"API 오류: {response.status_code}")
             return None
     except Exception as e:
+        data_logger.error(f"💥 포트폴리오 개요 데이터 조회 실패: {str(e)}")
         st.error(f"데이터 조회 중 오류가 발생했습니다: {e}")
         return None
 
@@ -46,6 +87,9 @@ def fetch_portfolio_overview(account=None):
 def fetch_holdings(account=None, market=None):
     """보유 종목 데이터 조회"""
     try:
+        data_logger.info(
+            f"📋 보유 종목 데이터 조회 시작 - 계정: {account or '전체'}, 시장: {market or '전체'}"
+        )
         url = f"{API_BASE_URL}/holdings/"
         params = {}
         if account:
@@ -56,11 +100,15 @@ def fetch_holdings(account=None, market=None):
         response = requests.get(url, params=params)
 
         if response.status_code == 200:
-            return response.json()
+            holdings = response.json()
+            data_logger.info(f"✅ 보유 종목 데이터 조회 성공 - {len(holdings)}개 종목")
+            return holdings
         else:
+            data_logger.error(f"❌ 보유 종목 API 오류: {response.status_code}")
             st.error(f"API 오류: {response.status_code}")
             return []
     except Exception as e:
+        data_logger.error(f"💥 보유 종목 조회 실패: {str(e)}")
         st.error(f"보유 종목 조회 중 오류가 발생했습니다: {e}")
         return []
 
@@ -69,16 +117,39 @@ def fetch_holdings(account=None, market=None):
 def fetch_currency_rates():
     """환율 정보 조회"""
     try:
+        data_logger.info("💱 환율 정보 조회 시작")
         url = f"{API_BASE_URL}/currency/rates"
         response = requests.get(url)
 
         if response.status_code == 200:
-            return response.json()
+            rates = response.json()
+            data_logger.info(f"✅ 환율 정보 조회 성공 - {len(rates)}개 통화")
+            return rates
         else:
+            data_logger.error(f"❌ 환율 정보 API 오류: {response.status_code}")
             return []
     except Exception as e:
+        data_logger.error(f"💥 환율 정보 조회 실패: {str(e)}")
         st.error(f"환율 정보 조회 중 오류가 발생했습니다: {e}")
         return []
+
+
+@st.cache_data(ttl=300)
+def fetch_asset_allocation(account=None):
+    """자산 분배 정보 조회"""
+    try:
+        url = f"{API_BASE_URL}/portfolio/allocation"
+        params = {"account": account} if account else {}
+        response = requests.get(url, params=params)
+
+        if response.status_code == 200:
+            return response.json()
+        else:
+            st.error(f"자산 분배 API 오류: {response.status_code}")
+            return None
+    except Exception as e:
+        st.error(f"자산 분배 조회 중 오류가 발생했습니다: {e}")
+        return None
 
 
 def refresh_stock_prices():
@@ -134,8 +205,8 @@ with col2:
 st.title("💼 AssetNest 포트폴리오 대쉬보드")
 
 # 탭 생성
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["📈 포트폴리오 개요", "💼 보유 종목", "📊 성과 분석", "⚙️ 설정"]
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    ["📈 포트폴리오 개요", "💼 보유 종목", "🥧 자산 분배", "📊 성과 분석", "⚙️ 설정"]
 )
 
 # 포트폴리오 개요 탭
@@ -347,13 +418,128 @@ with tab2:
     else:
         st.warning("보유 종목 데이터를 불러올 수 없습니다.")
 
-# 성과 분석 탭
+# 자산 분배 탭
 with tab3:
+    st.header("🥧 자산 분배")
+
+    # 자산 분배 데이터 조회
+    allocation_data = fetch_asset_allocation(account_filter)
+
+    if allocation_data and allocation_data.get("allocations"):
+        # 총 포트폴리오 가치 표시
+        st.subheader(
+            f"💰 총 포트폴리오 가치: ₩{allocation_data['total_portfolio_value']:,.0f}"
+        )
+
+        # 데이터프레임 생성
+        allocations_df = pd.DataFrame(allocation_data["allocations"])
+
+        if len(allocations_df) > 0:
+            # 도넛차트
+            st.subheader("🍩 자산유형별 분배")
+            fig_donut = px.pie(
+                allocations_df,
+                values="total_market_value",
+                names="asset_category",
+                title="자산유형별 분배",
+                color_discrete_sequence=px.colors.qualitative.Set3,
+                hole=0.4,  # 도넛 모양
+            )
+            fig_donut.update_traces(textposition="inside", textinfo="percent+label")
+            fig_donut.update_layout(height=600)
+            st.plotly_chart(fig_donut, use_container_width=True)
+
+            # 바 차트
+            st.subheader("📈 자산유형별 평가금액")
+            fig_bar = px.bar(
+                allocations_df.sort_values("total_market_value", ascending=True),
+                x="total_market_value",
+                y="asset_category",
+                orientation="h",
+                title="자산유형별 평가금액",
+                color="asset_category",
+                color_discrete_sequence=px.colors.qualitative.Set2,
+                text="allocation_percentage",
+            )
+            fig_bar.update_traces(texttemplate="%{text:.1f}%", textposition="inside")
+            fig_bar.update_layout(showlegend=False, height=500)
+            fig_bar.update_xaxis(title="평가금액 (KRW)")
+            fig_bar.update_yaxis(title="자산유형")
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+            # 상세 테이블
+            st.subheader("📋 자산유형별 상세 정보")
+
+            # 표시용 데이터 포맷팅
+            display_allocations = allocations_df.copy()
+            display_allocations["total_market_value_formatted"] = display_allocations[
+                "total_market_value"
+            ].apply(lambda x: f"₩{x:,.0f}")
+            display_allocations["allocation_percentage_formatted"] = (
+                display_allocations["allocation_percentage"].apply(
+                    lambda x: f"{x:.2f}%"
+                )
+            )
+
+            # 분배율 순으로 정렬
+            display_allocations = display_allocations.sort_values(
+                "allocation_percentage", ascending=False
+            )
+
+            st.dataframe(
+                display_allocations[
+                    [
+                        "asset_category",
+                        "holdings_count",
+                        "total_market_value_formatted",
+                        "allocation_percentage_formatted",
+                    ]
+                ],
+                column_config={
+                    "asset_category": "자산유형",
+                    "holdings_count": "보유종목수",
+                    "total_market_value_formatted": "평가금액",
+                    "allocation_percentage_formatted": "분배율",
+                },
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            # 분배율 서머리
+            st.subheader("📊 분배율 서머리")
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                equity_total = allocations_df[
+                    allocations_df["asset_category"].str.contains("주식", na=False)
+                ]["allocation_percentage"].sum()
+                st.metric("주식 비중", f"{equity_total:.2f}%")
+
+            with col2:
+                bond_total = allocations_df[
+                    allocations_df["asset_category"].str.contains("채권", na=False)
+                ]["allocation_percentage"].sum()
+                st.metric("채권 비중", f"{bond_total:.2f}%")
+
+            with col3:
+                other_total = 100 - equity_total - bond_total
+                st.metric("기타 비중", f"{other_total:.2f}%")
+
+        else:
+            st.info("자산 분배 데이터가 없습니다.")
+
+    else:
+        st.warning(
+            "자산 분배 데이터를 불러올 수 없습니다. API 서버가 실행 중인지 확인해주세요."
+        )
+
+# 성과 분석 탭
+with tab4:
     st.header("📊 성과 분석")
     st.info("성과 분석 기능은 다음 단계에서 구현될 예정입니다.")
 
 # 설정 탭
-with tab4:
+with tab5:
     st.header("⚙️ 설정")
 
     # 환율 정보
