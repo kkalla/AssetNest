@@ -11,10 +11,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from .database import DatabaseManager
 from .models import (
     AssetAllocationResponse,
+    CashBalanceUpdate,
+    CashManagementSummary,
+    CashUpdateRequest,
     HoldingResponse,
     PerformanceData,
     PortfolioOverview,
     StockInfo,
+    TimeDepositCreate,
+    TimeDepositUpdate,
+    TimeDepositUpdateWithAccount,
     UnmatchedProductsResponse,
 )
 
@@ -322,6 +328,210 @@ async def get_unmatched_products(account: Optional[str] = None):
         raise HTTPException(
             status_code=500,
             detail=f"매칭되지 않는 상품 조회 중 오류가 발생했습니다: {str(e)}",
+        )
+
+
+# ============ 현금 관리 API 엔드포인트 ============
+
+
+@app.get("/api/v1/cash/summary", response_model=CashManagementSummary)
+async def get_cash_management_summary():
+    """현금 관리 요약 정보를 반환합니다."""
+    try:
+        api_logger.info("💰 현금 관리 요약 정보 조회 요청")
+        summary = await db.get_cash_management_summary()
+        api_logger.info("✅ 현금 관리 요약 정보 조회 완료")
+        return summary
+    except Exception as e:
+        api_logger.error(f"❌ 현금 관리 요약 정보 조회 실패: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"현금 관리 요약 정보 조회 중 오류가 발생했습니다: {str(e)}",
+        )
+
+
+@app.get("/api/v1/cash/balances/")
+async def get_cash_balances(account: Optional[str] = None):
+    """증권사별 예수금 정보를 반환합니다."""
+    try:
+        api_logger.info(f"💰 증권사별 예수금 조회 요청 - 계정: {account or '전체'}")
+        balances = await db.get_cash_balances(account)
+        api_logger.info(f"✅ 증권사별 예수금 조회 완료 - {len(balances)}개 계정")
+        return balances
+    except Exception as e:
+        api_logger.error(f"❌ 증권사별 예수금 조회 실패: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"증권사별 예수금 조회 중 오류가 발생했습니다: {str(e)}",
+        )
+
+
+@app.put("/api/v1/cash/balances/{account}")
+async def update_cash_balance(account: str, update_data: CashBalanceUpdate):
+    """특정 계좌의 예수금을 업데이트합니다."""
+    try:
+        # URL encoding된 계좌명을 디코딩
+        from urllib.parse import unquote
+
+        decoded_account = unquote(account)
+        api_logger.info(
+            f"💰 {decoded_account} 계좌 예수금 업데이트 요청: KRW={update_data.krw}, USD={update_data.usd}"
+        )
+        success = await db.update_cash_balance(
+            decoded_account, update_data.krw, update_data.usd
+        )
+
+        if success:
+            api_logger.info(f"✅ {decoded_account} 계좌 예수금 업데이트 성공")
+            return {
+                "message": f"{decoded_account} 계좌의 예수금이 성공적으로 업데이트되었습니다",
+                "success": True,
+            }
+        else:
+            api_logger.error(f"❌ {decoded_account} 계좌 예수금 업데이트 실패")
+            raise HTTPException(
+                status_code=400,
+                detail=f"{decoded_account} 계좌의 예수금 업데이트에 실패했습니다",
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(f"❌ 증권사별 예수금 업데이트 실패: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"증권사별 예수금 업데이트 중 오류가 발생했습니다: {str(e)}",
+        )
+
+
+@app.get("/api/v1/cash/deposits/")
+async def get_time_deposits(account: Optional[str] = None):
+    """예적금 정보를 반환합니다."""
+    try:
+        api_logger.info(f"💰 예적금 정보 조회 요청 - 계정: {account or '전체'}")
+        deposits = await db.get_time_deposits(account)
+        api_logger.info(f"✅ 예적금 정보 조회 완료 - {len(deposits)}개 예적금")
+        return deposits
+    except Exception as e:
+        api_logger.error(f"❌ 예적금 정보 조회 실패: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"예적금 정보 조회 중 오류가 발생했습니다: {str(e)}"
+        )
+
+
+@app.post("/api/v1/cash/deposits/")
+async def create_time_deposit(deposit_data: TimeDepositCreate):
+    """새로운 예적금을 생성합니다."""
+    try:
+        api_logger.info(f"💰 예적금 생성 요청: {deposit_data.invest_prod_name}")
+        success = await db.create_time_deposit(
+            account=deposit_data.account,
+            invest_prod_name=deposit_data.invest_prod_name,
+            market_value=deposit_data.market_value,
+            invested_principal=deposit_data.invested_principal,
+            maturity_date=deposit_data.maturity_date,
+            interest_rate=deposit_data.interest_rate,
+        )
+
+        if success:
+            api_logger.info(f"✅ 예적금 생성 성공: {deposit_data.invest_prod_name}")
+            return {"message": "예적금이 성공적으로 생성되었습니다", "success": True}
+        else:
+            api_logger.error(f"❌ 예적금 생성 실패: {deposit_data.invest_prod_name}")
+            raise HTTPException(status_code=400, detail="예적금 생성에 실패했습니다")
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(f"❌ 예적금 생성 실패: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"예적금 생성 중 오류가 발생했습니다: {str(e)}"
+        )
+
+
+@app.put("/api/v1/cash/deposits/{account}")
+async def update_time_deposit(account: str, update_data: TimeDepositUpdateWithAccount):
+    """특정 예적금을 수정합니다."""
+    try:
+        api_logger.info(f"💰 예적금 수정 요청: {update_data.invest_prod_name}")
+        success = await db.update_time_deposit(
+            account=account,
+            invest_prod_name=update_data.invest_prod_name,
+            market_value=update_data.market_value,
+            invested_principal=update_data.invested_principal,
+            maturity_date=update_data.maturity_date,
+            interest_rate=update_data.interest_rate,
+        )
+
+        if success:
+            api_logger.info(f"✅ 예적금 수정 성공: {update_data.invest_prod_name}")
+            return {"message": "예적금이 성공적으로 수정되었습니다", "success": True}
+        else:
+            api_logger.error(f"❌ 예적금 수정 실패: {update_data.invest_prod_name}")
+            raise HTTPException(
+                status_code=404, detail="예적금을 찾을 수 없거나 수정에 실패했습니다"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(f"❌ 예적금 수정 실패: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"예적금 수정 중 오류가 발생했습니다: {str(e)}"
+        )
+
+
+@app.delete("/api/v1/cash/deposits/{account}/{invest_prod_name}")
+async def delete_time_deposit(account: str, invest_prod_name: str):
+    """특정 예적금을 삭제합니다."""
+    try:
+        # URL encoding된 이름을 디코딩
+        from urllib.parse import unquote
+
+        deposit_name = unquote(invest_prod_name)
+
+        api_logger.info(f"💰 예적금 삭제 요청: {deposit_name}")
+        success = await db.delete_time_deposit(account, deposit_name)
+
+        if success:
+            api_logger.info(f"✅ 예적금 삭제 성공: {deposit_name}")
+            return {"message": "예적금이 성공적으로 삭제되었습니다", "success": True}
+        else:
+            api_logger.error(f"❌ 예적금 삭제 실패: {deposit_name}")
+            raise HTTPException(
+                status_code=404, detail="예적금을 찾을 수 없거나 삭제에 실패했습니다"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(f"❌ 예적금 삭제 실패: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"예적금 삭제 중 오류가 발생했습니다: {str(e)}"
+        )
+
+
+@app.put("/api/v1/cash/current")
+async def update_current_cash(cash_data: CashUpdateRequest):
+    """현재 현금을 업데이트하고 bs_timeseries에 저장합니다."""
+    try:
+        api_logger.info(f"💰 현재 현금 업데이트 요청: {cash_data.cash:,}원")
+        success = await db.update_current_cash(
+            cash=cash_data.cash, reason=cash_data.reason
+        )
+
+        if success:
+            api_logger.info("✅ 현재 현금 업데이트 성공")
+            return {
+                "message": "현재 현금이 성공적으로 업데이트되었습니다",
+                "success": True,
+            }
+        else:
+            api_logger.error("❌ 현재 현금 업데이트 실패")
+            raise HTTPException(status_code=400, detail="현금 업데이트에 실패했습니다")
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(f"❌ 현재 현금 업데이트 실패: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"현재 현금 업데이트 중 오류가 발생했습니다: {str(e)}",
         )
 
 

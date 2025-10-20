@@ -131,6 +131,11 @@ Presentation Layer (프레젠테이션 계층)
   - `latest_close` (최신 종가)
   - `marketcap` (시가총액, 십억 단위)
   - `updated_at` (업데이트 시간)
+- `bs_timeseries`: 
+  - `date` (날짜)
+  - `cash` (현금, 입출금계좌 합, 현금성자산의 합이 아님을 주의!)
+  - `time_deposit` (예적금)
+  - `security_cash_balance` (증권사 예수금)
 
 **확장 제안 테이블**
 

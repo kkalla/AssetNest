@@ -137,3 +137,93 @@ class UnmatchedProductsResponse(BaseModel):
 
     class Config:
         json_encoders = {datetime: lambda v: v.isoformat()}
+
+
+class CashBalance(BaseModel):
+    """증권사별 예수금 정보"""
+
+    account: str
+    krw: float
+    usd: float
+    updated_at: datetime
+
+
+class TimeDeposit(BaseModel):
+    """예적금 정보"""
+
+    account: str
+    invest_prod_name: str
+    market_value: int
+    invested_principal: int
+    maturity_date: Optional[datetime] = None
+    interest_rate: Optional[float] = None
+    updated_at: datetime
+
+
+class BSTimeseries(BaseModel):
+    """일별 현금 흐름 정보"""
+
+    date: datetime
+    cash: int
+    time_deposit: int
+    security_cash_balance: int
+
+
+class CashBalanceUpdate(BaseModel):
+    """현금 잔액 업데이트 요청"""
+
+    krw: Optional[float] = None
+    usd: Optional[float] = None
+
+
+class TimeDepositCreate(BaseModel):
+    """예적금 생성 요청"""
+
+    account: str
+    invest_prod_name: str
+    market_value: int
+    invested_principal: int
+    maturity_date: Optional[datetime] = None
+    interest_rate: Optional[float] = None
+
+
+class TimeDepositUpdate(BaseModel):
+    """예적금 수정 요청"""
+
+    market_value: Optional[int] = None
+    invested_principal: Optional[int] = None
+    maturity_date: Optional[datetime] = None
+    interest_rate: Optional[float] = None
+
+
+class TimeDepositUpdateWithAccount(BaseModel):
+    """예적금 수정 요청 (계정 포함)"""
+
+    invest_prod_name: str
+    market_value: Optional[int] = None
+    invested_principal: Optional[int] = None
+    maturity_date: Optional[datetime] = None
+    interest_rate: Optional[float] = None
+
+
+class CashUpdateRequest(BaseModel):
+    """현금 업데이트 요청 (bs_timeseries)"""
+
+    cash: int
+    reason: Optional[str] = None
+
+
+class CashManagementSummary(BaseModel):
+    """현금 관리 요약 정보"""
+
+    total_cash: int  # 총 현금 잔액
+    total_cash_balance: int  # 총 현금 잔액
+    total_time_deposit: int  # 총 예적금
+    total_security_cash: int  # 총 증권사 예수금
+    cash_balances: List[CashBalance]
+    time_deposits: List[TimeDeposit]
+    latest_bs_entry: Optional[BSTimeseries]
+    updated_at: datetime
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}

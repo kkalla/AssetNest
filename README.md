@@ -2,6 +2,10 @@
 
 ## TODO
 
+### Dashboard
+
+- [x] 총 현금자산 업데이트 방식 수정
+
 ### DB
 
 - [ ] DB initialize
@@ -13,15 +17,17 @@
 
 ### API
 
-- [ ] symbol table 업데이트하는 API 추가
+- [x] symbol table 업데이트하는 API 추가
+- [ ] 예수금 계산시 최신 환율 반영
 
 ### Features
 
-- [ ] 포트폴리오 분배 비율 대쉬보드
+- [x] 포트폴리오 분배 비율 대쉬보드
+- [ ] 포트폴리오 개요 대쉬보드 - 현금 업데이트 내용 반영
 
 ### Test
 
-- [ ] API 테스트
+- [x] API 테스트
 - [ ] 대쉬보드 테스트
 - [ ] Podman compose 테스트
 
@@ -29,7 +35,3 @@
 
 - [x] Podman compose 추가
 - [ ] Makefile에 deploy 추가
-
-### Publish
-
-- [ ] DB initialize

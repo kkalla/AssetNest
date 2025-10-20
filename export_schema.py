@@ -25,16 +25,40 @@ def get_table_schemas():
 
     supabase: Client = create_client(supabase_url, supabase_key)
 
-    # 알려진 테이블 목록
-    known_tables = [
-        "by_accounts",
-        "cash_balance",
-        "profit_timeseries",
-        "currency",
-        "symbol_table",
-        "funds",
-        "time_deposit",
-    ]
+    # 모든 테이블 조회 (information_schema 사용)
+    try:
+        # PostgreSQL information_schema에서 모든 테이블 목록 조회
+        tables_response = supabase.rpc("get_all_tables", {}).execute()
+
+        if tables_response.data:
+            all_tables = [row["table_name"] for row in tables_response.data]
+            print(f"📋 데이터베이스에서 {len(all_tables)}개 테이블 발견")
+        else:
+            # RPC 함수가 없는 경우, 알려진 테이블 목록으로 대체
+            print("⚠️ RPC 함수 사용 불가, 알려진 테이블 목록으로 대체")
+            all_tables = [
+                "by_accounts",
+                "cash_balance",
+                "profit_timeseries",
+                "currency",
+                "symbol_table",
+                "funds",
+                "time_deposit",
+                "bs_timeseries",
+            ]
+    except Exception as e:
+        print(f"⚠️ 테이블 목록 조회 실패: {e}")
+        print("ℹ️ 알려진 테이블 목록으로 대체합니다")
+        all_tables = [
+            "by_accounts",
+            "cash_balance",
+            "profit_timeseries",
+            "currency",
+            "symbol_table",
+            "funds",
+            "time_deposit",
+            "bs_timeseries",
+        ]
 
     schema_data = {
         "export_timestamp": datetime.now().isoformat(),
@@ -45,7 +69,7 @@ def get_table_schemas():
     print("🔍 테이블 스키마 조회 시작...\n")
 
     # 각 테이블의 스키마 정보 조회
-    for table_name in known_tables:
+    for table_name in all_tables:
         try:
             print(f"📋 {table_name} 테이블 조회 중...")
 

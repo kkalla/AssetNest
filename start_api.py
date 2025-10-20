@@ -22,7 +22,7 @@ if __name__ == "__main__":
 
     uvicorn.run(
         "api.main:app",  # import string 형태로 전달
-        host="0.0.0.0",
+        host="localhost",
         port=8000,
         reload=True,  # 개발 중에만 사용
         log_level="info",

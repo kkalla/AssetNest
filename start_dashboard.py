@@ -30,7 +30,7 @@ if __name__ == "__main__":
             "--server.port",
             "8501",
             "--server.address",
-            "0.0.0.0",
+            "localhost",
             "--theme.base",
             "light",
         ]
