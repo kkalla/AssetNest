@@ -61,6 +61,7 @@ api:
 dashboard:
 	@echo "📊 Streamlit 대쉬보드를 시작합니다..."
 	@echo "🌐 대쉬보드: http://localhost:8501"
+	@echo "🏗️  새로운 모듈식 아키텍처로 실행됩니다"
 	python start_dashboard.py
 
 # API와 대쉬보드 동시 실행 (백그라운드)
